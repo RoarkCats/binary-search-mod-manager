@@ -1,4 +1,10 @@
+##> Binary Search Mod Manager <##
+#        Version: 1.1.0         #
+#        By: RoarkCats          #
+##> ------------------------- <##
+
 from os import listdir as ls, rename
+import re
 
 ## Settings
 MODS_DIR = './mods/'
@@ -49,15 +55,16 @@ class Mod :
         if self.excluded : self.excluded = False
         else : self.excluded = True; self.enable()
     
-    def enable(self) :
-        if not self.enabled :
+    def enable(self, print_err=True) :
+        if not self.enabled and not self.excluded :
             try :
                 rename(MODS_DIR+self.id+DISABLED, MODS_DIR+self.id)
                 self.enabled = True
             except Exception as e :
-                print(e)
+                if print_err: print(e)
+        return self.enabled
     
-    def disable(self) :
+    def disable(self, print_err=False) :
         if self.enabled and not self.excluded :
             try :
                 live_dep = [d for d in self.dependents if d.enabled]
@@ -66,10 +73,13 @@ class Mod :
                 rename(MODS_DIR+self.id, MODS_DIR+self.id+DISABLED)
                 self.enabled = False
             except Exception as e :
-                print(e)
+                if print_err: print(e)
+        return not self.enabled
     
     def get_file(self) :
         return self.id if self.enabled else self.id+DISABLED
+
+
 
 ## Initialize mod lists
 all_mods = []
@@ -83,8 +93,9 @@ def display(mods, compact=True) :
         if not compact :
             print(f"{i} - {mod.get_file()}{dependents_str(mod)}")
         else :
-            print(f"{str(i).rjust(3,'0')}: {compact_str(mod)}\t", end='')
+            print(f"{str(i).rjust(3,'0')}: {compact_str(mod)}", end='')
             if ((i+1) % COMPACT_PER_LINE) == 0 : print()
+            else : print("\t",end='')
     print('\n')
 
 def compact_str(mod, len=COMPACT_LEN) :
@@ -98,42 +109,57 @@ def dependents_str(mod: Mod) :
 
 ## Search Operations
 def reset() :
-    [mod.enable() for mod in all_mods]
+    success = [mod.enable() for mod in all_mods]
     history.clear()
     history.append((0,len(all_mods)))
+    print(f"Reset binary search ({sum(success)}/{len(success)} enabled)\n")
 
 def narrow_search(swap=False) :
     last_op = history[-1]
     count = last_op[1] - last_op[0]
     new_op = (last_op[0], last_op[1]-(count//2)) if not swap else (last_op[0]+(count//2), last_op[1])
-    [mod.disable() for mod in all_mods[new_op[1]:]+all_mods[:new_op[0]] ] # disable outside operation
+    success = [mod.disable() for mod in all_mods[new_op[1]:]+all_mods[:new_op[0]] ] # disable outside operation
     history.append(new_op)
+    print(f"Narrowed binary search ({sum(success)}/{len(success)} disabled)\n")
 
 def swap_search() :
     # basically just going back and switching to other half of narrow_search
-    undo_search()
+    undo_search(swap=True)
+    print("Swapped last binary search to alternate half")
     narrow_search(swap=True)
 
-def undo_search() :
+def undo_search(swap=False) :
     if len(history) > 1 :
         history.pop()
         last_op = history[-1]
-        [mod.enable() for mod in all_mods[last_op[0]:last_op[1]] ]
+        success = [mod.enable() for mod in all_mods[last_op[0]:last_op[1]] ]
+        if not swap : print(f"Undid last binary search ({sum(success)}/{len(success)} enabled)\n")
     else :
-        print("Nothing to undo!\n")
+        if not swap : print("Nothing to undo!\n")
 
 ## Mod Operations
+def search_mod_name(txt: str) :
+    mods = [mod for mod in all_mods if txt.lower() in mod.id.lower()] # partial string match
+    if len(mods) <= 1 : return mods # return mod if 1 found
+
+    print("Multiple mods found!")
+    display(mods)
+    return select_mods(mods)
+
 def select_mods(last_displayed = None) :
     if last_displayed == None :
         display(all_mods)
         last_displayed = all_mods
 
-    nums = input(" Select Mod(s) (ex 0,7,2-5): ")
+    nums = input(" Select Mod(s) (ex 7,2-5,jei): ")
+    mods = []
     print()
     try :
         nums = nums.replace(' ','').split(',')
+        text = [nums.remove(n) or n for n in nums if re.search('[A-Za-z_]',n) != None] # filter text inputs out of nums and into text
+        [mods.extend(search_mod_name(txt)) for txt in text] # get mods from text
         nums = [[int(n) for n in num.split('-')] for num in nums] # [[a],[b],[c,d]]
-        mods = [last_displayed[n[0]] for n in nums if len(n)==1] # add individual mod ids
+        mods += [last_displayed[n[0]] for n in nums if len(n)==1] # add individual mod ids
         [mods.extend(last_displayed[n[0]:n[1]+1]) for n in nums if len(n)==2] # add series of mod ids
         return mods
     except Exception as e :
@@ -144,32 +170,44 @@ def edit_mods(last_displayed) :
 
     mods = select_mods(last_displayed)
     
-    print(f"Editing: {", ".join([compact_str(mod,round(COMPACT_LEN*1.5))+dependents_str(mod) for mod in mods])}")
-    print("Back (-1) - Disable/Enable (0/1) Toggle Exclusion (2) Add/Reset Dependents (3/4) Add/Remove Requirements (5/6)")
+    while (True) :
 
-    choice = input("\n Operation: ")
-    print()
+        print(f"Editing: {", ".join([compact_str(mod,round(COMPACT_LEN*1.5))+dependents_str(mod) for mod in mods])}")
+        print("Back (-1) - Disable/Enable (0/1) Toggle Exclusion (2) Add/Reset Dependents (3/4) Add/Remove Requirements (5/6)")
+
+        choice = input("\n Operation: ")
+        print()
     
-    match choice :
-        case '-1': return
-        case '0':
-            [mod.disable() for mod in mods]
-        case '1':
-            [mod.enable() for mod in mods]
-        case '2':
-            [mod.toggle_exclusion() for mod in mods]
-        case '3':
-            dependents = select_mods()
-            [ [mod.add_dependent(dep) for dep in dependents] for mod in mods]
-        case '4':
-            [mod.reset_dependents() for mod in mods]
-        case '5':
-            reqs = select_mods()
-            [ [req.add_dependent(mod) for mod in mods] for req in reqs]
-        case '6':
-            reqs = select_mods()
-            [ [req.remove_dependent(mod) for mod in mods] for req in reqs]
-        case _ : print("Invalid operation.\n")
+        match choice :
+            case '-1': return
+            case '0':
+                disabled = sum([mod.disable(print_err=True) for mod in mods])
+                print(f"Disabled {disabled}/{len(mods)} selected mods\n")
+            case '1':
+                enabled = sum([mod.enable() for mod in mods])
+                print(f"Enabled {enabled}/{len(mods)} selected mods\n")
+            case '2':
+                [mod.toggle_exclusion() for mod in mods]
+                print("Toggled exclusion on selected mods\n")
+            case '3':
+                dependents = select_mods()
+                [ [mod.add_dependent(dep) for dep in dependents] for mod in mods]
+                print("Added selected mods as dependents\n")
+            case '4':
+                [mod.reset_dependents() for mod in mods]
+                print("Reset dependents on selected mods\n")
+            case '5':
+                reqs = select_mods()
+                [ [req.add_dependent(mod) for mod in mods] for req in reqs]
+                print("Added selected mods as requirements\n")
+            case '6':
+                reqs = select_mods()
+                [ [req.remove_dependent(mod) for mod in mods] for req in reqs]
+                print("Removed selected mods as requirements\n")
+            case _ : 
+                print("Invalid operation.\n")
+                continue
+        break
 
 
 ## Menu
