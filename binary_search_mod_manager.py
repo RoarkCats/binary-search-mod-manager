@@ -1,9 +1,9 @@
 ##> Binary Search Mod Manager <##
-#        Version: 1.2.0         #
+#        Version: 1.3.0         #
 #        By: RoarkCats          #
 ##> ------------------------- <##
 
-from os import listdir as ls, rename
+from os import listdir as ls, rename, makedirs
 from ast import literal_eval
 import re
 
@@ -13,7 +13,7 @@ JAR = '.jar'
 DISABLED = '.disabled'
 COMPACT_LEN = 16 # str len for mods compact display
 COMPACT_PER_LINE = 5 # number of mods to show per line compact display
-STATE_FILE_DIR = './' # dir for state files (will not makedir!)
+STATE_FILE_DIR = './' # dir for state files
 STATE_FILE_EXT = '.bsmm' # file extension for state import/exports
 
 ## Mod class
@@ -58,7 +58,7 @@ class Mod :
         if self.excluded : self.excluded = False
         else : self.excluded = True; self.enable()
     
-    def enable(self, print_err=True) :
+    def enable(self, print_err=True) -> list[bool] :
         if not self.enabled and not self.excluded :
             try :
                 rename(MODS_DIR+self.id+DISABLED, MODS_DIR+self.id)
@@ -67,7 +67,7 @@ class Mod :
                 if print_err: print(e)
         return self.enabled
     
-    def disable(self, print_err=False) :
+    def disable(self, print_err=False) -> list[bool] :
         if self.enabled and not self.excluded :
             try :
                 live_dep = [d for d in self.dependents if d.enabled]
@@ -79,7 +79,7 @@ class Mod :
                 if print_err: print(e)
         return not self.enabled
     
-    def get_file(self) :
+    def get_file(self) -> str :
         return self.id if self.enabled else self.id+DISABLED
 
 
@@ -101,14 +101,21 @@ def display(mods, compact=True) :
             else : print("\t",end='')
     print('\n')
 
-def compact_str(mod, len=COMPACT_LEN) :
+def compact_str(mod, len=COMPACT_LEN) -> str :
     if isinstance(mod, Mod) : mod = mod.id
     mod = mod.replace(JAR,'').replace(DISABLED,'')
     mod = mod[:len].ljust(len)
     return mod
 
-def dependents_str(mod: Mod) :
+def dependents_str(mod: Mod) -> str :
     return f"-->{str([compact_str(dep) for dep in mod.dependents])}" if mod.has_dependents else ''
+
+U = '\033[4m' # underline
+R = '\033[0m' # reset
+def format_txt_char(txt: str, code: str=U, repl: str='^') -> str :
+    # formats the char after `repl` with `code`
+    text = txt.split(repl)
+    return ''.join(text[:1]+[code+t[:1]+R+t[1:] for t in text[1:]])
 
 ## Search Operations
 def reset() :
@@ -117,12 +124,16 @@ def reset() :
     history.append((0,len(all_mods)))
     print(f"Reset binary search ({sum(success)}/{len(success)} enabled)\n")
 
-def narrow_search(swap=False) :
-    last_op = history[-1]
-    count = last_op[1] - last_op[0]
-    new_op = (last_op[0], last_op[1]-(count//2)) if not swap else (last_op[0]+(count//2), last_op[1])
-    success = [mod.disable() for mod in all_mods[new_op[1]:]+all_mods[:new_op[0]] ] # disable outside operation
-    history.append(new_op)
+def narrow_search(swap=False, new_op=None) :
+    if new_op == None :
+        last_op = history[-1]
+        count = last_op[1] - last_op[0]
+        new_op = (last_op[0], last_op[1]-(count//2)) if not swap else (last_op[0]+(count//2), last_op[1])
+        history.append(new_op)
+    mods = all_mods[new_op[1]:]+all_mods[:new_op[0]]
+    success = [mod.disable() for mod in mods] # disable outside operation
+    if False in success : # try again for failed disables (ex dependency got disabled after)
+        success = [successful or mods[i].disable() for i,successful in enumerate(success)]
     print(f"Narrowed binary search ({sum(success)}/{len(success)} disabled)\n")
 
 def swap_search() :
@@ -141,7 +152,7 @@ def undo_search(swap=False) :
         if not swap : print("Nothing to undo!\n")
 
 ## Mod Operations
-def search_mod_name(txt: str) :
+def search_mod_name(txt: str) -> list[Mod] :
     mods = [mod for mod in all_mods if txt.lower() in mod.id.lower()] # partial string match
     if len(mods) <= 1 : return mods # return mod if 1 found
 
@@ -149,7 +160,7 @@ def search_mod_name(txt: str) :
     display(mods)
     return select_mods(mods)
 
-def select_mods(last_displayed = None) :
+def select_mods(last_displayed = None) -> list[Mod] :
     if last_displayed == None :
         display(all_mods)
         last_displayed = all_mods
@@ -176,34 +187,34 @@ def edit_mods(last_displayed) :
     while (True) :
 
         print(f"Editing: {", ".join([compact_str(mod,round(COMPACT_LEN*1.5))+dependents_str(mod) for mod in mods])}")
-        print("Back (-1) - Disable/Enable (0/1) Toggle Exclusion (2) Add/Reset Dependents (3/4) Add/Remove Requirements (5/6)")
+        print(format_txt_char("^Back (-1) - ^Disable/^Enable (0/1) ^Toggle Exclusion (2) ^Add/^Reset De^pendents (3/4) ^Add/^Remove Re^quirements (5/6)"))
 
         choice = input("\n Operation: ")
         print()
     
-        match choice :
-            case '-1': return
-            case '0':
+        match choice.strip().lower() :
+            case '-1'|'b': return
+            case '0'|'d':
                 disabled = sum([mod.disable(print_err=True) for mod in mods])
                 print(f"Disabled {disabled}/{len(mods)} selected mods\n")
-            case '1':
+            case '1'|'e':
                 enabled = sum([mod.enable() for mod in mods])
                 print(f"Enabled {enabled}/{len(mods)} selected mods\n")
-            case '2':
+            case '2'|'t':
                 [mod.toggle_exclusion() for mod in mods]
                 print("Toggled exclusion on selected mods\n")
-            case '3':
+            case '3'|'ap'|'p':
                 dependents = select_mods()
                 [ [mod.add_dependent(dep) for dep in dependents] for mod in mods]
                 print("Added selected mods as dependents\n")
-            case '4':
+            case '4'|'rp':
                 [mod.reset_dependents() for mod in mods]
                 print("Reset dependents on selected mods\n")
-            case '5':
+            case '5'|'aq'|'q':
                 reqs = select_mods()
                 [ [req.add_dependent(mod) for mod in mods] for req in reqs]
                 print("Added selected mods as requirements\n")
-            case '6':
+            case '6'|'rq':
                 reqs = select_mods()
                 [ [req.remove_dependent(mod) for mod in mods] for req in reqs]
                 print("Removed selected mods as requirements\n")
@@ -213,33 +224,43 @@ def edit_mods(last_displayed) :
         break
 
 ## State Operations
+def mk_dir_state() :
+    try : makedirs(STATE_FILE_DIR)
+    except : pass
+
 def export_state() :
+    mk_dir_state()
     name = input(" State Name: ")
+    if name == '' : return
+
     try :
         with open(f"{STATE_FILE_DIR}{name}{STATE_FILE_EXT}", "w") as f :
             f.write("# This file is imported by binary_search_mod_manager.py as a saved state (do not edit this file!)\n")
             f.write(f"{{ 'history': {history}, ")
             f.write(f"'exclusions': {[mod.id for mod in all_mods if mod.excluded]}, ")
-            f.write(f"'dependents': {[(mod.id, list(mod.dependents)) for mod in all_mods if mod.has_dependents]} }}")
+            f.write(f"'dependents': {[(mod.id, [str(d) for d in mod.dependents]) for mod in all_mods if mod.has_dependents]} }}")
         print(f"\nState exported to {name}{STATE_FILE_EXT}\n")
     except Exception as e :
         print(e)
 
 def import_state() :
+    mk_dir_state()
     print(f" Found States: {[f.replace(STATE_FILE_EXT,'') for f in ls(STATE_FILE_DIR) if f.endswith(STATE_FILE_EXT)]}")
     name = input(" State Name: ")
+    if name == '' : return
+
     try :
         with open(f"{STATE_FILE_DIR}{name}{STATE_FILE_EXT}", "r") as f :
             data = f.readlines()[1]
             data = literal_eval(data)
 
-            # reset()
-            # history; history = data['history']
-            # NEED EXTRA PROC FOR HISTORY
             [mod.toggle_exclusion() for mod_id in data['exclusions'] for mod in search_mod_name(mod_id) if not mod.excluded]
             [search_mod_name(mod_id)[0].add_dependent(search_mod_name(dep)[0]) for mod_id, dependents in data['dependents'] for dep in dependents]
+            global history
+            history = history[:1]+data['history'][1:] # preserve largest scope of history
+            if len(history) > 1 : narrow_search(new_op = history[-1]) # rerun last operation (narrowest)
 
-        print(f"\nState imported from {name}{STATE_FILE_EXT}\n")
+        print(f"State imported from {name}{STATE_FILE_EXT}\n")
     except Exception as e :
         print(e)
 
@@ -250,31 +271,31 @@ def menu(value = -1) :
         
         choice = str(value)
         if value == -1 :
-            print("Exit (-1) - List All/Enabled/Disabled (0/1/2) Narrow/Swap/Undo/Reset Search (3/4/5/6) Edit Mods (7) Export/Import (8/9)")
+            print(format_txt_char("E^xit (-1) - ^List ^All/^Enabled/^Disabled (0/1/2) ^Narrow/^Swap/^Undo/^Reset Search (3/4/5/6) Edit ^Mods (7) ^Export/^Import (8/9)"))
             choice = input("\n Operation: ")
             print()
 
-        match choice :
-            case '-1': exit()
-            case '0':
+        match choice.strip().lower() :
+            case '-1'|'x': exit()
+            case '0'|'la'|'l':
                 print('__ All Mods __')
                 display(all_mods)
                 last_displayed = all_mods
-            case '1':
+            case '1'|'le':
                 print('__ Enabled Mods __')
                 last_displayed = [mod for mod in all_mods if mod.enabled]
                 display(last_displayed)
-            case '2':
+            case '2'|'ld':
                 print('__ Disabled Mods __')
                 last_displayed = [mod for mod in all_mods if not mod.enabled]
                 display(last_displayed)
-            case '3': narrow_search()
-            case '4': swap_search()
-            case '5': undo_search()
-            case '6': reset()
-            case '7': edit_mods(last_displayed)
-            case '8': export_state()
-            case '9': import_state()
+            case '3'|'n': narrow_search()
+            case '4'|'s': swap_search()
+            case '5'|'u': undo_search()
+            case '6'|'r': reset()
+            case '7'|'m': edit_mods(last_displayed)
+            case '8'|'e': export_state()
+            case '9'|'i': import_state()
             case _ : print("Invalid operation.\n")
         
         if value != -1 : return
