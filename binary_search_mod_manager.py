@@ -1,5 +1,5 @@
 ##> Binary Search Mod Manager <##
-#        Version: 1.3.1         #
+#        Version: 1.3.2         #
 #        By: RoarkCats          #
 ##> ------------------------- <##
 
@@ -56,8 +56,7 @@ class Mod :
         self.has_dependents = False
 
     def toggle_exclusion(self) :
-        if self.excluded : self.excluded = False
-        else : self.excluded = True; self.enable()
+        self.excluded = not self.excluded
     
     def enable(self, print_err=True) -> list[bool] :
         if not self.enabled and not self.excluded :
