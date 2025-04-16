@@ -1,5 +1,5 @@
 ##> Binary Search Mod Manager <##
-#        Version: 1.3.0         #
+#        Version: 1.3.1         #
 #        By: RoarkCats          #
 ##> ------------------------- <##
 
@@ -45,6 +45,7 @@ class Mod :
         if self == mod : print("Cannot add self as dependent!"); return
         self.has_dependents = True
         self.dependents.add(mod)
+        if not self.enabled and mod.enabled : self.enable()
         
     def remove_dependent(self, mod: 'Mod') :
         if mod in self.dependents : self.dependents.remove(mod)
@@ -154,6 +155,7 @@ def undo_search(swap=False) :
 ## Mod Operations
 def search_mod_name(txt: str) -> list[Mod] :
     mods = [mod for mod in all_mods if txt.lower() in mod.id.lower()] # partial string match
+    if len(mods) == 0 : print(f"No mods found matching: '{txt}'!")
     if len(mods) <= 1 : return mods # return mod if 1 found
 
     print("Multiple mods found!")
@@ -170,7 +172,8 @@ def select_mods(last_displayed = None) -> list[Mod] :
     print()
     try :
         nums = nums.replace(' ','').split(',')
-        text = [nums.remove(n) or n for n in nums if re.search('[A-Za-z_]',n) != None] # filter text inputs out of nums and into text
+        text = [n for n in nums if re.search('[A-Za-z_]',n)]
+        nums = [n for n in nums if n not in text] # filter text inputs out of nums and into text
         [mods.extend(search_mod_name(txt)) for txt in text] # get mods from text
         nums = [[int(n) for n in num.split('-')] for num in nums] # [[a],[b],[c,d]]
         mods += [last_displayed[n[0]] for n in nums if len(n)==1] # add individual mod ids
@@ -205,19 +208,19 @@ def edit_mods(last_displayed) :
                 print("Toggled exclusion on selected mods\n")
             case '3'|'ap'|'p':
                 dependents = select_mods()
-                [ [mod.add_dependent(dep) for dep in dependents] for mod in mods]
-                print("Added selected mods as dependents\n")
+                out = [ [mod.add_dependent(dep) for dep in dependents] for mod in mods]
+                print(f"Added selected {len(out[0])} mods as dependents\n")
             case '4'|'rp':
                 [mod.reset_dependents() for mod in mods]
                 print("Reset dependents on selected mods\n")
             case '5'|'aq'|'q':
                 reqs = select_mods()
-                [ [req.add_dependent(mod) for mod in mods] for req in reqs]
-                print("Added selected mods as requirements\n")
+                out = [ [req.add_dependent(mod) for mod in mods] for req in reqs]
+                print(f"Added selected {len(out[0])} mods as requirements\n")
             case '6'|'rq':
                 reqs = select_mods()
-                [ [req.remove_dependent(mod) for mod in mods] for req in reqs]
-                print("Removed selected mods as requirements\n")
+                out = [ [req.remove_dependent(mod) for mod in mods] for req in reqs]
+                print(f"Removed selected {len(out[0])} mods as requirements\n")
             case _ : 
                 print("Invalid operation.\n")
                 continue
