@@ -6,7 +6,7 @@
 from os import listdir as ls, rename, makedirs
 from ast import literal_eval
 import re
-print(__file__.split('/'))
+
 ## Settings
 MODS_DIR = './mods/'
 JAR = '.jar'
