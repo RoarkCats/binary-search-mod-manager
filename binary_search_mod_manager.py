@@ -1,5 +1,5 @@
 ##> Binary Search Mod Manager <##
-#        Version: 1.3.3         #
+#        Version: 1.3.4         #
 #        By: RoarkCats          #
 ##> ------------------------- <##
 
@@ -190,6 +190,7 @@ def select_mods(last_displayed = None) -> list[Mod] :
 def edit_mods(last_displayed) :
 
     mods = select_mods(last_displayed)
+    if len(mods) < 1 : print("No mods selected!\n"); return
     
     while (True) :
 
