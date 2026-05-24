@@ -1,11 +1,13 @@
 ##> Binary Search Mod Manager <##
-#        Version: 1.3.5         #
+#        Version: 1.4.0         #
 #        By: RoarkCats          #
 ##> ------------------------- <##
 
 from os import listdir as ls, rename, makedirs, path
 from ast import literal_eval
 import re
+from zipfile import ZipFile, BadZipFile
+import tomllib, json, io
 
 ## Settings
 DIR = path.dirname(path.realpath(__file__))+'/' or './' # path to script else current working dir
@@ -232,6 +234,103 @@ def edit_mods(last_displayed) :
                 continue
         break
 
+## File operations
+
+TOML_PATHS  = ('META-INF/neoforge.mods.toml', 'META-INF/mods.toml')
+FABRIC_PATH = ('fabric.mod.json',)
+NON_MODS    = {'minecraft', 'forge', 'neoforge', 'fabric', 'fabricloader',
+               'fabric-loader', 'java', 'mixinextras'}
+JIJ_PREFIXES  = ('META-INF/jarjar/', 'META-INF/jars/')
+JIJ_MAX_DEPTH = 3
+
+def _parse_jar(source, depth=0) -> tuple[set, set] :
+    # takes a path or a BytesIO for a nested jar
+    # returns (provides, requires) from this jar + nested jars
+    provides, requires = set(), set()
+    try :
+        with ZipFile(source) as z :
+            members = set(z.namelist())
+
+            toml_path = next((p for p in TOML_PATHS if p in members), None)
+            if toml_path :
+                try :
+                    data = tomllib.loads(z.read(toml_path).decode('utf-8-sig'))
+                    for entry in data.get('mods', []) :
+                        if 'modId' in entry :
+                            provides.add(str(entry['modId']).lower())
+                    for dep_list in data.get('dependencies', {}).values() :
+                        for dep in dep_list :
+                            if 'modId' in dep and dep_is_required(dep) :
+                                requires.add(str(dep['modId']).lower())
+                except Exception as e :
+                    print(f"  TOML error in {toml_path}: {e}")
+            elif 'fabric.mod.json' in members :
+                try :
+                    data = json.loads(z.read('fabric.mod.json').decode('utf-8-sig'), strict=False)
+                    if 'id' in data :
+                        provides.add(str(data['id']).lower())
+                    for pid in data.get('provides', []) :
+                        provides.add(str(pid).lower())
+                    for dep_id in data.get('depends', {}) :
+                        requires.add(str(dep_id).lower())
+                except Exception as e :
+                    print(f"  JSON error in fabric.mod.json: {e}")
+
+            # Jar in Jar logic
+            if depth < JIJ_MAX_DEPTH :
+                for name in members :
+                    if name.endswith(JAR) and name.startswith(JIJ_PREFIXES) :
+                        sub_p, sub_r = _parse_jar(io.BytesIO(z.read(name)), depth + 1)
+                        provides |= sub_p
+                        requires |= sub_r
+    except (BadZipFile, FileNotFoundError, OSError) as e :
+        if depth == 0 :
+            print(f"  cannot open jar: {e}")
+    return provides, requires
+
+def dep_is_required(dep: dict) -> bool :
+    if 'mandatory' in dep : return bool(dep['mandatory'])
+    if 'type' in dep : return str(dep['type']).lower() == 'required'
+    return True
+
+def parse_mod_metadata(mod: Mod) -> tuple[set, set] :
+    provides, requires = _parse_jar(DIR + MODS_DIR + mod.get_file())
+    return provides, requires - provides
+
+def scan_dependencies(verbose=True) :
+    parsed, failed = [], []
+    for mod in all_mods :
+        provides, requires = parse_mod_metadata(mod)
+        if not provides and not requires : failed.append(mod)
+        parsed.append((mod, provides, requires))
+
+    id_map = {}
+    for mod, provides, _ in parsed :
+        for mid in provides :
+            id_map.setdefault(mid, set()).add(mod)
+
+    for mod in all_mods : mod.reset_dependents()
+
+    links, ambient, missing = 0, set(), set()
+    for mod, _, requires in parsed :
+        for dep_id in requires :
+            providers = id_map.get(dep_id)
+            if providers is None :
+                if dep_id not in NON_MODS : missing.add(dep_id)
+            elif len(providers) == 1 :
+                provider = next(iter(providers))
+                if provider != mod :
+                    provider.add_dependent(mod)
+                    links += 1
+            else :
+                ambient.add(dep_id)
+    if verbose :
+        print(f"Scanned {len(all_mods)} mods, {links} dependency links")
+        if ambient : print(f"  {len(ambient)} multi-provided ids treated as ambient (bundled libraries)")
+        if failed  : print(f"  No metadata: {[compact_str(m) for m in failed]}")
+        if missing : print(f"  Required but not installed: {sorted(missing)}")
+    print()
+
 ## State Operations
 def mk_dir_state() :
     try : makedirs(DIR+STATE_FILE_DIR)
@@ -281,7 +380,7 @@ def menu(value = -1) :
         
         choice = str(value)
         if value == -1 :
-            print(format_txt_char("E^xit (-1) - ^List ^All/^Enabled/^Disabled (0/1/2) ^Narrow/^Swap/^Undo/^Reset Search (3/4/5/6) Edit ^Mods (7) ^Export/^Import (8/9)"))
+            print(format_txt_char("E^xit (-1) - ^List ^All/^Enabled/^Disabled (0/1/2) ^Narrow/^Swap/^Undo/^Reset Search (3/4/5/6) Edit ^Mods (7) ^Export/^Import (8/9) Scan ^Dependencies (10)"))
             choice = input("\n Operation: ")
             print()
 
@@ -309,6 +408,7 @@ def menu(value = -1) :
             case '7'|'m': edit_mods(last_displayed)
             case '8'|'e': export_state()
             case '9'|'i': import_state()
+            case '10'|'d': scan_dependencies()
             case _ : print("Invalid operation.\n")
         
         if value != -1 : return
