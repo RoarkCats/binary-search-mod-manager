@@ -1,5 +1,5 @@
 ##> Binary Search Mod Manager <##
-#        Version: 1.4.0         #
+#        Version: 1.4.1         #
 #        By: RoarkCats          #
 ##> ------------------------- <##
 
@@ -241,7 +241,7 @@ FABRIC_PATH = ('fabric.mod.json',)
 NON_MODS    = {'minecraft', 'forge', 'neoforge', 'fabric', 'fabricloader',
                'fabric-loader', 'java', 'mixinextras'}
 JIJ_PREFIXES  = ('META-INF/jarjar/', 'META-INF/jars/')
-JIJ_MAX_DEPTH = 3
+JIJ_MAX_DEPTH = 5
 
 def _parse_jar(source, depth=0) -> tuple[set, set] :
     # takes a path or a BytesIO for a nested jar
@@ -283,6 +283,8 @@ def _parse_jar(source, depth=0) -> tuple[set, set] :
                         sub_p, sub_r = _parse_jar(io.BytesIO(z.read(name)), depth + 1)
                         provides |= sub_p
                         requires |= sub_r
+            else:
+                print(f"  Hit JiJ recursion limit on file '{source}'")
     except (BadZipFile, FileNotFoundError, OSError) as e :
         if depth == 0 :
             print(f"  cannot open jar: {e}")
