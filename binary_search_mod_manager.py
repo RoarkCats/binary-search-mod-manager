@@ -1,9 +1,10 @@
 ##> Binary Search Mod Manager <##
-#        Version: 1.5.0-a1         #
+#        Version: 1.5.0-a2      #
 #        By: RoarkCats          #
 ##> ------------------------- <##
 
 from os import listdir as ls, rename, makedirs, path, system, walk
+from datetime import datetime
 from ast import literal_eval
 import re
 from zipfile import ZipFile, BadZipFile
@@ -18,6 +19,7 @@ COMPACT_LEN = 16 # str len for mods compact display
 COMPACT_PER_LINE = 5 # number of mods to show per line compact display
 STATE_FILE_DIR = 'binary_search_mod_manager/' # base directory for state files
 STATE_FILE_EXT = '.bsmm' # file extension for state import/exports
+FILE_DATE_FORMAT = "%Y-%m-%d_%H-%M-%S" # naming convention for files that format date and time
 
 ## Mod class
 class Mod :
@@ -345,12 +347,13 @@ def get_states() :
         for f in files if f.endswith(STATE_FILE_EXT)
     ]
 
-def export_state() :
-    mk_dir_state()
-    name = input(" State Name: ")
-    if name == '' : return
-    if name in get_states() :
-        if input("Overwrite existing state? (y/n) ").strip().lower() == 'n' : print(); return
+def export_state(name='') :
+    if not name :
+        mk_dir_state()
+        name = input(" State Name: ")
+        if name == '' : return
+        if name in get_states() :
+            if input("Overwrite existing state? (y/n) ").strip().lower() == 'n' : print(); return
     try :
         mk_dir_state(path.dirname(name))
         with open(f"{DIR+STATE_FILE_DIR}{name}{STATE_FILE_EXT}", "w") as f :
@@ -430,6 +433,8 @@ def main() :
 
     menu(0) # display all mods
     try : menu() # start menu
-    except Exception as e : input(e)
+    except Exception as e :
+        export_state("crash/"+datetime.now().strftime(FILE_DATE_FORMAT))
+        input(e)
 
 if __name__ == '__main__' : main()

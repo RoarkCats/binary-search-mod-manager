@@ -12,10 +12,11 @@ Settings can be modified by editing the script at the top of the file
 MODS_DIR = './mods/'
 JAR = '.jar'
 DISABLED = '.disabled'
-COMPACT_LEN = 16            # str len for mods compact display
-COMPACT_PER_LINE = 5        # number of mods to show per line compact display
-STATE_FILE_DIR = './'       # dir for state files
-STATE_FILE_EXT = '.bsmm'    # file extension for state import/exports
+COMPACT_LEN = 16                              # str len for mods compact display
+COMPACT_PER_LINE = 5                          # number of mods to show per line compact display
+STATE_FILE_DIR = 'binary_search_mod_manager/' # base directory for state files
+STATE_FILE_EXT = '.bsmm'                      # file extension for state import/exports
+FILE_DATE_FORMAT = "%Y-%m-%d_%H-%M-%S"        # naming convention for files that format date and time
 ```
 
 ## Dependency Detection
