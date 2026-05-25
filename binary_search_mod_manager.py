@@ -1,9 +1,9 @@
 ##> Binary Search Mod Manager <##
-#        Version: 1.4.1         #
+#        Version: 1.4.2         #
 #        By: RoarkCats          #
 ##> ------------------------- <##
 
-from os import listdir as ls, rename, makedirs, path
+from os import listdir as ls, rename, makedirs, path, system
 from ast import literal_eval
 import re
 from zipfile import ZipFile, BadZipFile
@@ -217,18 +217,18 @@ def edit_mods(last_displayed) :
             case '3'|'ap'|'p':
                 dependents = select_mods()
                 out = [ [mod.add_dependent(dep) for dep in dependents] for mod in mods]
-                print(f"Added selected {len(out[0])} mods as dependents\n")
+                if (len(out) > 0): print(f"Added selected {len(out[0])} mods as dependents\n")
             case '4'|'rp':
                 [mod.reset_dependents() for mod in mods]
                 print("Reset dependents on selected mods\n")
             case '5'|'aq'|'q':
                 reqs = select_mods()
                 out = [ [req.add_dependent(mod) for mod in mods] for req in reqs]
-                print(f"Added selected {len(out[0])} mods as requirements\n")
+                if (len(out) > 0): print(f"Added selected {len(out[0])} mods as requirements\n")
             case '6'|'rq':
                 reqs = select_mods()
                 out = [ [req.remove_dependent(mod) for mod in mods] for req in reqs]
-                print(f"Removed selected {len(out[0])} mods as requirements\n")
+                if (len(out) > 0): print(f"Removed selected {len(out[0])} mods as requirements\n")
             case _ : 
                 print("Invalid operation.\n")
                 continue
@@ -418,6 +418,7 @@ def menu(value = -1) :
 
 ## Main
 def main() :
+    system('') # Dummy call often enables ANSI text format support Win10 cmd
 
     menu(0) # display all mods
     try : menu() # start menu
