@@ -17,3 +17,10 @@ COMPACT_PER_LINE = 5        # number of mods to show per line compact display
 STATE_FILE_DIR = './'       # dir for state files
 STATE_FILE_EXT = '.bsmm'    # file extension for state import/exports
 ```
+
+## Dependency Detection
+Supports auto-detection scanning for mod dependencies for Fabric, NeoForge, and Forge (1.13+) mod formats
+<br>
+**Note**: Scans mod metadata to register dependencies, however, some unspecified dependencies may be missed
+
+Special thanks to 111foxman111 for scanning implementation and testing
