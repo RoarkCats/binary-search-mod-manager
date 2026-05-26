@@ -16,6 +16,8 @@ COMPACT_LEN = 16                              # str len for mods compact display
 COMPACT_PER_LINE = 5                          # number of mods to show per line compact display
 STATE_FILE_DIR = 'binary_search_mod_manager/' # base directory for state files
 STATE_FILE_EXT = '.bsmm'                      # file extension for state import/exports
+AUTOSAVE_SEARCH_STATES = True                 # automatically save a separate state when narrowing the search
+AUTOSAVE_UNNAMED_STATES = False               # automatically save states which have not been exported (named) in the session
 FILE_DATE_FORMAT = "%Y-%m-%d_%H-%M-%S"        # naming convention for files that format date and time
 ```
 

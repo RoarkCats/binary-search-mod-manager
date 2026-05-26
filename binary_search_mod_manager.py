@@ -1,5 +1,5 @@
 ##> Binary Search Mod Manager <##
-#        Version: 1.5.0-a2      #
+#        Version: 1.5.0         #
 #        By: RoarkCats          #
 ##> ------------------------- <##
 
@@ -19,6 +19,8 @@ COMPACT_LEN = 16 # str len for mods compact display
 COMPACT_PER_LINE = 5 # number of mods to show per line compact display
 STATE_FILE_DIR = 'binary_search_mod_manager/' # base directory for state files
 STATE_FILE_EXT = '.bsmm' # file extension for state import/exports
+AUTOSAVE_SEARCH_STATES = True # automatically save a separate state when narrowing the search
+AUTOSAVE_UNNAMED_STATES = False # automatically save states which have not been exported (named) in the session
 FILE_DATE_FORMAT = "%Y-%m-%d_%H-%M-%S" # naming convention for files that format date and time
 
 ## Mod class
@@ -95,6 +97,8 @@ all_mods = []
 try : all_mods = [Mod(m) for m in ls(DIR+MODS_DIR) if m.endswith(JAR) or m.endswith(JAR+DISABLED)]
 except : input('FAILED TO FIND MODS FOLDER!'); exit()
 history = [ (0,len(all_mods)) ]
+state_name = '' # most recently inputted state name for autosaves
+state_name_placeholder = datetime.now().strftime(FILE_DATE_FORMAT)
 
 ## Display methods
 def display(mods, compact=True) :
@@ -130,6 +134,17 @@ def reset() :
     history.append((0,len(all_mods)))
     print(f"Reset binary search ({sum(success)}/{len(success)} enabled)\n")
 
+def history_to_binary() -> str :
+    if (history == []): return ''
+    out = ''
+    last = history[0]
+    for cur in history[1:] :
+        if last == cur : continue
+        if last[0] == cur[0] : out += '0'
+        elif last[1] == cur[1] : out += '1'
+        last = cur
+    return out
+
 def narrow_search(swap=False, new_op=None) :
     if new_op == None :
         last_op = history[-1]
@@ -141,6 +156,10 @@ def narrow_search(swap=False, new_op=None) :
     if False in success : # try again for failed disables (ex dependency got disabled after)
         success = [successful or mods[i].disable() for i,successful in enumerate(success)]
     print(f"Narrowed binary search ({sum(success)}/{len(success)} disabled)\n")
+
+    if AUTOSAVE_SEARCH_STATES :
+        if state_name != '' : export_state(f"autosave/{state_name}/{history_to_binary()}", False)
+        elif AUTOSAVE_UNNAMED_STATES : export_state(f"autosave/{state_name_placeholder}/{history_to_binary()}", False)
 
 def swap_search(undo=True) :
     # basically just going back and switching to other half of narrow_search
@@ -340,18 +359,19 @@ def mk_dir_state(subdir='') :
     try : makedirs(DIR+STATE_FILE_DIR+subdir)
     except : pass
 
-def get_states() :
+def get_states() -> list :
     return [
         (root.replace(DIR+STATE_FILE_DIR,'')+path.sep+f.replace(STATE_FILE_EXT,'')).replace(path.sep,'/').strip('/')
         for root,_,files in walk(DIR+STATE_FILE_DIR)
         for f in files if f.endswith(STATE_FILE_EXT)
     ]
 
-def export_state(name='') :
+def export_state(name='', printOut=True) :
     if not name :
         mk_dir_state()
         name = input(" State Name: ")
         if name == '' : return
+        global state_name; state_name = name
         if name in get_states() :
             if input("Overwrite existing state? (y/n) ").strip().lower() == 'n' : print(); return
     try :
@@ -361,7 +381,7 @@ def export_state(name='') :
             f.write(f"{{ 'history': {history}, ")
             f.write(f"'exclusions': {[mod.id for mod in all_mods if mod.excluded]}, ")
             f.write(f"'dependents': {[(mod.id, [str(d) for d in mod.dependents]) for mod in all_mods if mod.has_dependents]} }}")
-        print(f"\nState exported to {name}{STATE_FILE_EXT}\n")
+        if printOut : print(f"\nState exported to {name}{STATE_FILE_EXT}\n")
     except Exception as e :
         print(e)
 
@@ -370,6 +390,7 @@ def import_state() :
     print(f" Found States: {get_states()}")
     name = input(" State Name: ")
     if name == '' : return
+    global state_name; state_name = name
 
     try :
         with open(f"{DIR+STATE_FILE_DIR}{name}{STATE_FILE_EXT}", "r") as f :
